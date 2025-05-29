@@ -28,3 +28,4 @@ go.work.sum
 #Misc.
 **/.DS_Store
 examples/relifevc/config.json
+examples/relifevc/relifevc
