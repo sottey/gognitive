@@ -1,0 +1,8 @@
+{
+  "api_key": "[ENTER YOUR API KEY HERE]",
+  "timezone": "America/Los_Angeles",
+  "export": {
+    "format": "json",
+    "dir": "~/Limitless"
+  }
+}
