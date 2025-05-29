@@ -1,23 +1,126 @@
 # gognitive
 
-**Gognitive** is a Go client for the [Limitless AI Pendant](https://limitless.ai) API, providing easy access to lifelog data in structured form.
+**Gognitive** is a Go client for the [Limitless AI Pendant](https://limitless.ai) API, providing typed access to lifelog data for analysis, archiving, or intelligent retrieval.
 
-> 🧠 Built for developers who want to explore, export, analyze, or integrate their daily lifelogs.
+> 🧠 Designed for developers building lifelogging tools, personal knowledge bases, or RAG systems.
 
 ---
 
 ## ✨ Features
 
-- List lifelogs with filters (`limit`, `date`, `start`, `end`, `timezone`, `cursor`)
-- Fetch a single lifelog by ID
-- Strongly-typed support for `ContentNode`, headings, blockquotes, speaker info
-- Easy integration into CLI, automation, or RAG pipelines
+- Authenticate and connect to the Limitless API
+- List and filter lifelogs with full pagination support
+- Fetch individual lifelogs by ID
+- Work with structured data (timestamps, blockquotes, speakers, headings)
+- Export-ready integration with CLI and automation tools
 
 ---
 
-## 🚀 Getting Started
-
-### Installation
+## 🚀 Installation
 
 ```bash
 go get github.com/sottey/gognitive
+```
+
+If you're contributing or using locally:
+
+```go
+replace github.com/sottey/gognitive => ../gognitive
+```
+
+---
+
+## 🧱 Client API
+
+```go
+client := gognitive.NewClient("sk-your-api-key")
+```
+
+### Available Methods
+
+```go
+ListLifelogs(limit int, cursor, date, start, end, timezone string) ([]Lifelog, string, error)
+
+GetLifelog(id string) (*Lifelog, error)
+```
+
+---
+
+## 🔡 Types
+
+```go
+type Lifelog struct {
+	ID        string
+	Title     string
+	Markdown  string
+	Contents  []ContentNode
+	StartTime string
+	EndTime   string
+}
+
+type ContentNode struct {
+	Type              string
+	Content           string
+	StartTime         string
+	EndTime           string
+	SpeakerName       *string
+	SpeakerIdentifier *string
+	Children          []ContentNode
+}
+```
+
+---
+
+## 🧪 Example CLI: `relifevc`
+
+A real-world CLI app using `gognitive` is included in the `example/relifevc` directory.
+
+### Usage
+
+```bash
+cd example/relifevc
+go run main.go list --limit 5
+```
+
+Or build it:
+
+```bash
+go build -o relifevc
+./relifevc list --limit 5
+./relifevc export --save --all --format=json --dir=./backups
+```
+
+### Config
+
+Create `~/.relifevc/config.json`:
+
+```json
+{
+  "api_key": "sk-xxx",
+  "timezone": "America/Los_Angeles",
+  "export": {
+    "format": "json",
+    "dir": "./exports"
+  }
+}
+```
+
+---
+
+## 📦 Roadmap
+
+- [ ] POST/annotation support (if the API expands)
+- [ ] Rate limiting + retry middleware
+- [ ] Built-in local indexer for RAG-ready storage
+
+---
+
+## 🛡 License
+
+MIT © 2025 [Sean Ottey](https://github.com/sottey)
+
+---
+
+## 🙋‍♂️ Questions?
+
+Open an issue, fork the repo, or build something awesome with your lifelogs.
