@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sottey/gognitive"
 	"github.com/spf13/cobra"
@@ -62,7 +63,7 @@ var exportCmd = &cobra.Command{
 		}
 
 		if exportAll {
-			return exportAllLifeLogs(client, outputDir)
+			return exportAllFromAPI(client, outputDir)
 		}
 
 		return fmt.Errorf("please provide --id or --all")
@@ -77,38 +78,47 @@ func exportSingleLifeLog(client *gognitive.Client, outputDir string, id string) 
 	return saveEntry(outputDir, *entry)
 }
 
-func exportAllLifeLogs(client *gognitive.Client, outputDir string) error {
+func exportAllFromAPI(client *gognitive.Client, outputDir string) error {
+	existing := map[string]bool{}
 	files, err := os.ReadDir(outputDir)
-	if err != nil {
-		return fmt.Errorf("reading output dir: %w", err)
+	if err == nil {
+		for _, f := range files {
+			if strings.HasPrefix(f.Name(), "lifelog_") && strings.HasSuffix(f.Name(), ".json") {
+				id := strings.TrimSuffix(strings.TrimPrefix(f.Name(), "lifelog_"), ".json")
+				existing[id] = true
+			}
+		}
 	}
 
-	for _, file := range files {
-		name := file.Name()
-		if !strings.HasPrefix(name, "lifelog_") || !strings.HasSuffix(name, ".json") {
-			continue
+	cursor := ""
+	for {
+		lifelogs, nextCursor, err := client.ListLifelogs(100, cursor, "", "", "", "")
+		if err != nil {
+			return fmt.Errorf("listing lifelogs: %w", err)
 		}
 
-		id := strings.TrimSuffix(strings.TrimPrefix(name, "lifelog_"), ".json")
-		fullPath := filepath.Join(outputDir, fmt.Sprintf("lifelog_%s.json", id))
+		for _, l := range lifelogs {
+			if !repull && existing[l.ID] {
+				continue
+			}
 
-		if !repull {
-			if _, err := os.Stat(fullPath); err == nil {
-				continue // skip if file exists and not repulling
+			entry, err := client.GetEnrichedLifelog(l.ID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to fetch lifelog %s: %v", l.ID, err)
+				continue
+			}
+
+			fmt.Printf("Exporting: %s %s\n", entry.StartTime, entry.ID)
+			if err := saveEntry(outputDir, *entry); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to save lifelog %s: %v", l.ID, err)
 			}
 		}
 
-		entry, err := client.GetEnrichedLifelog(id)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to fetch lifelog %s: %v\n", id, err)
-			continue
+		if nextCursor == "" {
+			break
 		}
-
-		fmt.Printf("Exporting entry: %s %s\n", entry.StartTime, entry.ID)
-
-		if err := saveEntry(outputDir, *entry); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to save lifelog %s: %v\n", id, err)
-		}
+		cursor = nextCursor
+		time.Sleep(1 * time.Second)
 	}
 
 	return nil
@@ -130,117 +140,6 @@ func saveEntry(dir string, entry gognitive.EnrichedLifelog) error {
 func init() {
 	rootCmd.AddCommand(exportCmd)
 	exportCmd.Flags().StringVarP(&lifelogID, "id", "i", "", "ID of the lifelog to export")
-	exportCmd.Flags().BoolVarP(&exportAll, "all", "a", false, "Export all lifelogs found in output directory")
+	exportCmd.Flags().BoolVarP(&exportAll, "all", "a", false, "Export all lifelogs not already saved")
 	exportCmd.Flags().BoolVar(&repull, "repull", false, "Re-pull and overwrite even if file already exists")
 }
-
-/*package cmd
-
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"time"
-
-	"github.com/sottey/gognitive"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-)
-
-var exportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "Export lifelogs to JSON files",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client := gognitive.NewClient(viper.GetString("api_key"))
-		exportDir := viper.GetString("export_path")
-		if exportDir == "" {
-			exportDir = "./export"
-		}
-
-		if exportAll {
-			return exportAllLifelogs(client, exportDir)
-		}
-
-		if lifelogID == "" {
-			return fmt.Errorf("must provide a lifelog ID or use --all")
-		}
-
-		return exportSingleLifelog(client, lifelogID, exportDir)
-	},
-}
-
-var lifelogID string
-var exportAll bool
-
-func init() {
-	rootCmd.AddCommand(exportCmd)
-	exportCmd.Flags().StringVarP(&lifelogID, "id", "i", "", "ID of the lifelog to export")
-	exportCmd.Flags().BoolVarP(&exportAll, "all", "a", false, "Export all lifelogs")
-	exportCmd.Flags().BoolP("repull", "r", false, "Re-pull all entries and overwrite existing files")
-}
-
-func exportAllLifelogs(client *gognitive.Client, baseDir string) error {
-	cursor := ""
-	for {
-		lifelogs, nextCursor, err := client.ListLifelogs(50, cursor, "", "", "", "")
-		if err != nil {
-			return err
-		}
-
-		for _, l := range lifelogs {
-			enriched, err := client.GetEnrichedLifelog(l.ID)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error enriching lifelog %s: %v\n", l.ID, err)
-				continue
-			}
-
-			dateFolder := filepath.Join(baseDir, l.StartTime[:10])
-			os.MkdirAll(dateFolder, 0755)
-
-			outPath := filepath.Join(dateFolder, l.ID+".json")
-			outFile, err := os.Create(outPath)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error creating file %s: %v\n", outPath, err)
-				continue
-			}
-			defer outFile.Close()
-
-			enc := json.NewEncoder(outFile)
-			enc.SetIndent("", "  ")
-			if err := enc.Encode(enriched); err != nil {
-				fmt.Fprintf(os.Stderr, "error writing file %s: %v\n", outPath, err)
-				continue
-			}
-		}
-
-		if nextCursor == "" {
-			break
-		}
-		cursor = nextCursor
-		time.Sleep(1 * time.Second)
-	}
-	return nil
-}
-
-func exportSingleLifelog(client *gognitive.Client, id, baseDir string) error {
-	enriched, err := client.GetEnrichedLifelog(id)
-	if err != nil {
-		return err
-	}
-
-	dateFolder := filepath.Join(baseDir, enriched.StartTime[:10])
-	os.MkdirAll(dateFolder, 0755)
-
-	outPath := filepath.Join(dateFolder, enriched.ID+".json")
-	outFile, err := os.Create(outPath)
-	if err != nil {
-		return err
-	}
-	defer outFile.Close()
-
-	enc := json.NewEncoder(outFile)
-	enc.SetIndent("", "  ")
-	return enc.Encode(enriched)
-}
-*/
