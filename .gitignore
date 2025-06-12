@@ -22,10 +22,11 @@ go.work
 go.work.sum
 
 # env file
-.env
+**/.env
 **/config.json
 
 #Misc.
 **/.DS_Store
 examples/relifevc/config.json
 examples/relifevc/relifevc
+examples/relifevc/export/**

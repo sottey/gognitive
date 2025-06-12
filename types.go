@@ -44,3 +44,14 @@ type LifelogsResponse struct {
 	Data LifelogsResponseData `json:"data"`
 	Meta Meta                 `json:"meta"`
 }
+
+// EnrichedLifelog represents a full lifelog entry with tags
+type EnrichedLifelog struct {
+	ID        string        `json:"id"`
+	Title     string        `json:"title"`
+	StartTime string        `json:"start_time"`
+	EndTime   string        `json:"end_time"`
+	Markdown  string        `json:"markdown"`
+	Contents  []ContentNode `json:"contents"`
+	Tags      []string      `json:"tags"`
+}

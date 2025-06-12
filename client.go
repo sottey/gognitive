@@ -95,3 +95,23 @@ func (c *Client) GetLifelog(id string) (*Lifelog, error) {
 
 	return &result.Data.Lifelogs[0], nil
 }
+
+// GetEnrichedLifelog retrieves a lifelog and enriches it with generated tags
+func (c *Client) GetEnrichedLifelog(id string) (*EnrichedLifelog, error) {
+	log, err := c.GetLifelog(id)
+	if err != nil {
+		return nil, err
+	}
+
+	tags := internal.GenerateTags(log.Markdown)
+
+	return &EnrichedLifelog{
+		ID:        log.ID,
+		Title:     log.Title,
+		StartTime: log.StartTime,
+		EndTime:   log.EndTime,
+		Markdown:  log.Markdown,
+		Contents:  log.Contents,
+		Tags:      tags,
+	}, nil
+}
