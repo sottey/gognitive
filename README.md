@@ -105,6 +105,12 @@ Create `~/.relifevc/config.json`:
 }
 ```
 
+## Troubleshooting
+## To test the API calls using curl:
+```
+curl -X GET 'https://api.limitless.ai/v1/lifelogs?limit=100' -H 'Authorization: Bearer [YOUR API KEY HERE]' -H 'Content-Type: application/json'
+```
+
 ---
 
 ## 📦 Roadmap

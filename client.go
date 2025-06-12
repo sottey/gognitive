@@ -1,6 +1,7 @@
 package gognitive
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -25,6 +26,50 @@ func NewClient(apiKey string) *Client {
 
 // ListLifelogs retrieves a list of lifelogs with optional filters.
 // Supports pagination via cursor.
+
+func (c *Client) ListLifelogs(limit int, cursor, date, start, end, timezone string) ([]Lifelog, string, error) {
+	baseURL := "https://api.limitless.ai/v1/lifelogs"
+	params := url.Values{}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if cursor != "" {
+		params.Set("cursor", cursor)
+	}
+	// ... add other params as needed ...
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, "", fmt.Errorf("API request failed: %s", resp.Status)
+	}
+
+	var result struct {
+		Items      []Lifelog `json:"items"`
+		NextCursor string    `json:"nextCursor"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, "", err
+	}
+
+	return result.Items, result.NextCursor, nil
+}
+
+/*
 func (c *Client) ListLifelogs(limit int, cursor, date, start, end, timezone string) ([]Lifelog, string, error) {
 	baseURL := "https://api.limitless.ai/v1/lifelogs"
 	params := url.Values{}
@@ -70,6 +115,7 @@ func (c *Client) ListLifelogs(limit int, cursor, date, start, end, timezone stri
 
 	return result.Data.Lifelogs, result.Meta.Lifelogs.NextCursor, nil
 }
+*/
 
 // GetLifelog retrieves a single lifelog by ID.
 func (c *Client) GetLifelog(id string) (*Lifelog, error) {

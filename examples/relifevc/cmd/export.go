@@ -91,11 +91,19 @@ func exportAllFromAPI(client *gognitive.Client, outputDir string) error {
 	}
 
 	cursor := ""
+	pageCount := 0
 	for {
+		if pageCount > 100 {
+			return fmt.Errorf("too many pagination loops — possible infinite cursor")
+		}
+		pageCount++
+
 		lifelogs, nextCursor, err := client.ListLifelogs(100, cursor, "", "", "", "")
 		if err != nil {
 			return fmt.Errorf("listing lifelogs: %w", err)
 		}
+
+		fmt.Printf("DEBUG: Got %d lifelogs, nextCursor = %q\n", len(lifelogs), nextCursor)
 
 		for _, l := range lifelogs {
 			if !repull && existing[l.ID] {
@@ -104,14 +112,18 @@ func exportAllFromAPI(client *gognitive.Client, outputDir string) error {
 
 			entry, err := client.GetEnrichedLifelog(l.ID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to fetch lifelog %s: %v", l.ID, err)
+				fmt.Fprintf(os.Stderr, "warning: failed to fetch lifelog %s: %v\n", l.ID, err)
 				continue
 			}
 
 			fmt.Printf("Exporting: %s %s\n", entry.StartTime, entry.ID)
 			if err := saveEntry(outputDir, *entry); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to save lifelog %s: %v", l.ID, err)
+				fmt.Fprintf(os.Stderr, "warning: failed to save lifelog %s: %v\n", l.ID, err)
+				continue
 			}
+
+			// ✅ Add to existing to prevent re-fetch if seen again in paginated results
+			existing[entry.ID] = true
 		}
 
 		if nextCursor == "" {
